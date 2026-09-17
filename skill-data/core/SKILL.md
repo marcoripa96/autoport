@@ -9,7 +9,16 @@ Leases every host port a project binds, keyed by the checkout's real path, and e
 
 ## Reading the values
 
-**In TypeScript.** `resources` resolves lazily and synchronously, so it works in a Next route, a test, or a bare script with no wrapper command.
+**From `process.env`, with a dev dependency.** The default, and what to reach for first. `autoport-env.d.ts` augments `NodeJS.ProcessEnv` for this project, so `process.env.DATABASE_URL` is a typed `string` and a typo is a compile error — no import, nothing to resolve at runtime, and a deployed build that pruned autoport still starts.
+
+Nothing imports that file: a `.d.ts` inside the program contributes globally, the way `next-env.d.ts` does. Every value is a `string`, ports included, because that is what an environment holds.
+
+```ts
+const url = process.env.DATABASE_URL;        // string
+const port = Number(process.env.WEB_PORT);   // strings are strings
+```
+
+**From `resources`, with a real dependency.** Lazy and synchronous, so it works in a Next route, a test, or a bare script with no wrapper command.
 
 ```ts
 import { resources, services, tryResource } from "@mr96/autoport";
@@ -18,6 +27,8 @@ resources.DATABASE_URL;      // throws if absent, so a typo fails loudly
 tryResource("MAYBE");        // undefined instead
 services.db.containerPort;   // 5432 — unchanged inside the container
 ```
+
+It gives a number where the environment can only give a string, throws on a missing key rather than yielding `undefined`, and exposes `services`. That costs an import the production build must resolve, which is the reason to install autoport as a dependency rather than a dev dependency.
 
 Server-only. Importing it in a client component or an edge function returns a sentence telling you to read the value on the server.
 

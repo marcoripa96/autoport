@@ -17,9 +17,21 @@ resources.PORT;         // 40004
 ## Quick start
 
 ```bash
-bun add @mr96/autoport
+bun add -D @mr96/autoport
 autoport                  # instead of `pnpm dev`
 ```
+
+**A dev dependency**, because the values reach your code as environment
+variables and autoport is what puts them there. `autoport-env.d.ts` types
+`process.env` for this project, so `process.env.DATABASE_URL` is a `string` and
+a typo is a compile error — with nothing imported and nothing to resolve at
+runtime. A deployed build that pruned autoport still starts, reading whatever
+your platform sets.
+
+Install it as a real dependency only for `resources` and `services` below: they
+give a number where the environment can only give a string, and throw on a
+missing key rather than yielding `undefined`, and that costs an import your
+production build has to resolve.
 
 That is the whole setup. No config file, no port numbers, no codegen step —
 `autoport-env.d.ts` is written and kept current as a side effect of resolving,

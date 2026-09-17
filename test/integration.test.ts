@@ -184,11 +184,26 @@ describe("generated files", () => {
     expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain(TYPES_FILE);
   });
 
-  it("types ports as numbers and urls as strings", () => {
+  it("types process.env without naming the package, so it can be pruned", () => {
+    // The whole point of the ambient block: a project that keeps autoport out
+    // of its dependencies still gets typed values, and the generated file has
+    // nothing to resolve.
     const types = renderTypes(resolveProject({ cwd: root }));
+    expect(types).toContain("namespace NodeJS");
     expect(types).toContain(`"DATABASE_URL": string;`);
-    expect(types).toContain(`"PORT": number;`);
+    // Every environment value is a string, ports included.
+    expect(types).toContain(`"PORT": string;`);
+    expect(types).not.toContain(`declare module "@mr96/autoport"`);
+  });
+
+  it("augments the package only where it is a dependency", () => {
+    // `declare module` fails to compile when the module does not resolve, so it
+    // is emitted only for a project that actually installed autoport.
+    mkdirSync(join(root, "node_modules", "@mr96", "autoport"), { recursive: true });
+    const types = renderTypes(resolveProject({ cwd: root }));
     expect(types).toContain(`declare module "@mr96/autoport"`);
+    expect(types).toContain(`"PORT": number;`);
+    expect(types).toContain("namespace NodeJS");
   });
 });
 
