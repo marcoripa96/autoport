@@ -291,6 +291,24 @@ caches the result for the library; on a cold library-only start you get a warnin
 naming the keys that are missing until an autoport command runs.
 `autoport.config.json` has no such restriction.
 
+## What a project is called
+
+The **directory**, as `docker compose` names a project — so two worktrees of one
+repo are `shop` and `shop-experiment` without being told. Two checkouts that do
+land on the same name become `shop` and `shop-4f1a2c`.
+
+The name is what `COMPOSE_PROJECT_NAME`, the portless hostname and
+`autoport status` all use, so `name` in the config overrides it when the
+directory is a poor label:
+
+```ts
+export default defineConfig({ name: "shop-pr-421" });
+```
+
+Renaming a project renames its containers and volumes, so bring the stack down
+before changing it and up again after — the old volumes are otherwise orphaned
+rather than migrated.
+
 ## Leases
 
 Allocations live in `~/.autoport/leases.json`, keyed by the stack directory's

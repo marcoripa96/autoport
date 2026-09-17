@@ -9,8 +9,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { applyPorts } from "../src/commands/compose.ts";
+import { projectName } from "../src/project.ts";
 import { resolveProject, resolveSync } from "../src/resolve.ts";
 import { readLeases, release } from "../src/leases.ts";
 import { renderTypes, TYPES_FILE } from "../src/typegen.ts";
@@ -151,6 +152,21 @@ describe("generated files", () => {
   it("names the compose project so two checkouts do not share containers", () => {
     const project = resolveProject({ cwd: root });
     expect(applyPorts({ services: {} }, project).model.name).toBe(project.name);
+  });
+
+  it("names a project after its directory, as docker compose does", () => {
+    // Two worktrees of one repo carry the same package name and differ only by
+    // directory, so the directory is the half that tells them apart.
+    const project = resolveProject({ cwd: root });
+    expect(project.name).toBe(basename(root));
+    expect(project.name).not.toBe("shop");
+  });
+
+  it("suffixes a name another project already holds", () => {
+    const first = resolveProject({ cwd: root });
+    const second = projectName(root, () => true);
+    expect(second).not.toBe(first.name);
+    expect(second).toStartWith(`${first.name}-`);
   });
 
   it("warns about extra published ports it does not manage", () => {

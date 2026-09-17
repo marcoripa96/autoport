@@ -75,16 +75,6 @@ export const findProjectRoot = (from?: string): string => findProject(from).root
 const shortHash = (input: string): string =>
   createHash("sha256").update(input).digest("hex").slice(0, 6);
 
-/** Prefer the package's own name over the directory, which is often `web`. */
-const packageName = (dir: string): string | undefined => {
-  try {
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { name?: string };
-    return pkg.name?.replace(/^@[^/]+\//, "");
-  } catch {
-    return undefined;
-  }
-};
-
 /**
  * A name safe for the places one gets used verbatim: a docker project
  * (`[a-z0-9][a-z0-9_-]*`) and a DNS label in a proxy hostname.
@@ -96,11 +86,18 @@ export const safeLabel = (name: string): string =>
     .replace(/^[^a-z0-9]+/, "") || "autoport";
 
 /**
- * Human-readable label. Two worktrees of `shop` become `shop` and `shop-4f1a2c`,
- * which is also what keeps their docker container names apart.
+ * Human-readable label.
+ *
+ * The directory first, because that is what `docker compose` itself uses and
+ * what distinguishes two checkouts: worktrees of one repo share a package name
+ * and differ only by directory, so taking the package name made them collide
+ * and then need a hash to tell apart.
+ *
+ * Two checkouts that genuinely land on one name still become `shop` and
+ * `shop-4f1a2c`, which is what keeps their docker container names apart.
  */
 export const projectName = (root: string, taken: (name: string) => boolean): string => {
-  const base = packageName(root) ?? basename(root) ?? "project";
+  const base = basename(root) || "project";
   if (!taken(base)) return base;
   return `${base}-${shortHash(root)}`;
 };
