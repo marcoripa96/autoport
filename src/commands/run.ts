@@ -9,6 +9,7 @@ import { findProject, safeLabel } from "../project.ts";
 import { probeFree, projectLeaseKey, release } from "../leases.ts";
 import { findAppService, portKey } from "../render.ts";
 import { cachePath, resolveProject } from "../resolve.ts";
+import { proxyUrl, routeIsLive } from "../portless.ts";
 import { inRun, isAnonymousRun, mintRun } from "../session.ts";
 import type { ResolvedProject } from "../types.ts";
 import { which } from "../which.ts";
@@ -108,6 +109,32 @@ const splitScript = (body: string): string[] =>
  * autoport does not run a proxy of its own; it drives portless when portless is
  * installed, so the whole thing stays one command.
  */
+/**
+ * The name this run would register with portless, or undefined when the proxy
+ * is not in play. Shared with escalation, which has to know the name before it
+ * knows whether it needs a run of its own.
+ */
+const proxyLabel = (
+  project: ResolvedProject,
+  config: AutoportConfig | undefined,
+  disabled: boolean,
+): string | undefined => {
+  // AUTOPORT_PROXY=0 is the environment's way to say `--no-proxy`, for a CI job
+  // or a test run that must not depend on what happens to be installed.
+  if (process.env.AUTOPORT_PROXY === "0") return undefined;
+  if (disabled || (config?.proxy ?? "auto") === false) return undefined;
+  if (!findAppService(project.services)) return undefined;
+  if (process.env.AUTOPORT_ADOPT_PORT === "1") return undefined;
+  if (!which("portless")) return undefined;
+  // A run's dev server is its own, so it needs a hostname of its own: the
+  // project name is deliberately shared between concurrent runs (the stack is),
+  // and two of them registering one name with portless would leave APP_URL in
+  // the second run pointing at the first one's port.
+  return safeLabel(
+    isAnonymousRun() ? `${project.name}-${process.env.AUTOPORT_RUN}` : project.name,
+  );
+};
+
 const withProxy = (
   argv: string[],
   project: ResolvedProject,
@@ -116,26 +143,13 @@ const withProxy = (
   disabled: boolean,
 ): { argv: string[]; hostname?: string } => {
   const mode = config?.proxy ?? "auto";
-  if (disabled || mode === false) return { argv };
-  if (!findAppService(project.services)) return { argv };
-  if (process.env.AUTOPORT_ADOPT_PORT === "1") return { argv };
-
   const portless = which("portless");
-  if (!portless) {
-    if (mode === "portless") {
-      process.stderr.write("autoport: proxy is set to portless, but portless is not installed\n");
-    }
-    return { argv };
+  if (!portless && mode === "portless" && !disabled) {
+    process.stderr.write("autoport: proxy is set to portless, but portless is not installed\n");
   }
-
-  // A run's dev server is its own, so it needs a hostname of its own: the
-  // project name is deliberately shared between concurrent runs (the stack is),
-  // and two of them registering one name with portless would leave APP_URL in
-  // the second run pointing at the first one's port.
-  const label = safeLabel(
-    isAnonymousRun() ? `${project.name}-${process.env.AUTOPORT_RUN}` : project.name,
-  );
-  const hostname = `https://${label}.localhost`;
+  const label = proxyLabel(project, config, disabled);
+  if (!(portless && label)) return { argv };
+  const hostname = proxyUrl(label);
   env.APP_URL = hostname;
   // portless assigns the HTTP port itself and injects framework flags for the
   // dev servers that need them, so ours must not also be applied.
@@ -256,12 +270,21 @@ export const runCommand = async (rawArgs: string[]): Promise<number> => {
   // environment, and every nested call joins it instead of splitting again.
   if (!inRun()) {
     const busy = hostPorts(project, config?.reserve).filter((port) => !probeFree(port));
-    if (fresh || busy.length > 0) {
+    // Under portless the app's leased port is never bound — the proxy assigns
+    // its own — so a busy port cannot be the signal there. The registered
+    // hostname is: it is what a second run would take over.
+    const claimed = proxyLabel(project, config, noProxy) ?? "";
+    const nameTaken = claimed !== "" && routeIsLive(`${claimed}.localhost`);
+    if (fresh || busy.length > 0 || nameTaken) {
       const run = mintRun();
       process.env.AUTOPORT_RUN = run;
       project = resolveProject({ layout, config, reservations: config?.reserve });
       releaseWhenDone(projectLeaseKey(project.key, run), cachePath(project.appDir));
-      const why = fresh ? "asked for a fresh set" : `${busy.join(", ")} already serving`;
+      const why = fresh
+        ? "asked for a fresh set"
+        : busy.length > 0
+          ? `${busy.join(", ")} already serving`
+          : `${claimed}.localhost already serving`;
       process.stderr.write(`autoport: ${why} — this run has its own ports\n`);
     }
   }

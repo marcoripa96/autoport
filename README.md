@@ -163,9 +163,17 @@ autoport
 ```
 
 portless takes the HTTP service and gives it a name; autoport allocates
-everything else and sets `APP_URL`. Without portless the app gets an allocated
-port and `http://127.0.0.1:<port>`. `autoport --no-proxy`, or `proxy: false` in
-the config, opts out.
+everything else and sets `APP_URL` — read from the port and scheme portless
+records, so a proxy started without sudo on an unprivileged port gives you
+`https://shop.localhost:1355` rather than a URL that does not resolve. Without
+portless the app gets an allocated port and `http://127.0.0.1:<port>`.
+`autoport --no-proxy`, `AUTOPORT_PROXY=0`, or `proxy: false` in the config opts
+out.
+
+A second concurrent run is recognised here by the **registered hostname**, not by
+a busy port: portless assigns the port itself, so the leased one is never bound
+and could never be the signal. The extra run gets a name of its own. A route
+whose process has died does not count, since portless leaves it behind.
 
 ## Monorepos
 
@@ -318,6 +326,7 @@ share looks exactly like a deleted directory.
 | `AUTOPORT_RUN` | set by autoport for a run; inherited by children |
 | `AUTOPORT_TYPEGEN=0` | stop writing `autoport-env.d.ts` |
 | `AUTOPORT_QUIET=1` | suppress warnings |
+| `AUTOPORT_PROXY=0` | do not route through portless |
 | `AUTOPORT_SILENCE` | comma-separated warning codes to suppress |
 | `AUTOPORT_ADOPT_PORT=1` | obey an ambient `PORT` (set by the proxy wrapper) |
 

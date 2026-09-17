@@ -65,10 +65,14 @@ describe("resources", () => {
   });
 
   it("warns rather than silently obeying a stray ambient value", async () => {
+    // Not 3000: that is this fixture's canonical port, so on a machine where
+    // nothing holds it autoport leases it, the ambient value agrees, and there
+    // is correctly nothing to warn about — which made this test pass or fail
+    // depending on whose dev server happened to be up.
     const { stdout, stderr } = await inProcess(`console.log(autoport.resources.PORT)`, {
-      PORT: "3000",
+      PORT: "12345",
     });
-    expect(stdout).toBe("3000");
+    expect(stdout).toBe("12345");
     expect(stderr).toContain("autoport's");
   });
 

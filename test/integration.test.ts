@@ -180,7 +180,9 @@ describe("cli", () => {
   const run = async (args: string[], env: Record<string, string> = {}) => {
     const proc = Bun.spawn(["bun", CLI, ...args], {
       cwd: root,
-      env: { ...process.env, ...env },
+      // Hermetic: these assertions are about autoport's own ports, and would
+      // otherwise change meaning on a machine that has portless installed.
+      env: { ...process.env, AUTOPORT_PROXY: "0", ...env },
       stdout: "pipe",
       stderr: "pipe",
     });

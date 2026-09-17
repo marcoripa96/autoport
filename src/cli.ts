@@ -51,6 +51,7 @@ Environment:
   AUTOPORT_RANGE        allocation range, e.g. 40000-45000
   AUTOPORT_TYPEGEN=0    stop writing autoport-env.d.ts
   AUTOPORT_QUIET=1      suppress warnings
+  AUTOPORT_PROXY=0      do not route through portless
   AUTOPORT_RUN          this run's id; set by autoport, inherited by children
   AUTOPORT_SILENCE      comma-separated warning codes to suppress
 `;
