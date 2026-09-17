@@ -1,0 +1,4 @@
+node_modules
+dist
+.autoport
+autoport-env.d.ts

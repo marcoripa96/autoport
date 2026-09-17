@@ -1,0 +1,55 @@
+{
+  "name": "autoport",
+  "version": "0.2.0",
+  "description": "Automatic, conflict-free port allocation for local dev stacks.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "autoport": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "edge-light": "./dist/browser.js",
+      "worker": "./dist/browser.js",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts ./src/config.ts ./src/browser.ts ./src/cli.ts --outdir dist --target node --format esm --external yaml && tsc --emitDeclarationOnly",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "port",
+    "ports",
+    "dev",
+    "docker-compose",
+    "monorepo",
+    "worktree"
+  ],
+  "browser": {
+    "./dist/index.js": "./dist/browser.js"
+  }
+}
