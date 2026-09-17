@@ -5,6 +5,7 @@ import { composeCommand } from "./commands/compose.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { envCommand } from "./commands/env.ts";
 import { portCommand } from "./commands/port.ts";
+import { pruneCommand } from "./commands/prune.ts";
 import { releaseCommand } from "./commands/release.ts";
 import { runCommand } from "./commands/run.ts";
 import { skillsCommand } from "./commands/skills.ts";
@@ -41,6 +42,7 @@ const USAGE = `autoport — conflict-free ports for local dev stacks
   autoport skills [get <name>] how autoport works, for an agent to read
   autoport release [--all --yes]
                                drop leases so the ports can be reused
+  autoport prune [--yes]       remove stacks whose checkout is gone
 
 Flags:
   --fresh                      give this run its own ports, always
@@ -74,6 +76,7 @@ const SUBCOMMANDS: Record<string, (args: string[]) => number | Promise<number>> 
   doctor: doctorCommand,
   skills: skillsCommand,
   release: releaseCommand,
+  prune: pruneCommand,
 };
 
 /** Flags autoport itself understands before a command. */

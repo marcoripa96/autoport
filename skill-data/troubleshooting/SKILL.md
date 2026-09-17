@@ -13,6 +13,31 @@ autoport why DATABASE_URL
 autoport doctor          # what might be making autoport wrong
 ```
 
+## Stacks left behind
+
+autoport leases ports and reaps those itself: a run's lease goes when it exits,
+a named instance after six hours idle, and a lease for a deleted checkout after
+a fortnight. **Docker state it does not reap.** Delete a worktree, or rename a
+project, and its containers and volumes stay — nothing left names them.
+
+```bash
+autoport prune          # stacks whose checkout is gone; prints, removes nothing
+autoport prune --yes    # removes their containers, volumes and networks
+```
+
+It finds them by the lease, which is the only record of what a checkout called
+its stack — so run it **within the fortnight**, before the lease is dropped and
+the stack becomes unattributable. After that they have to be found by hand:
+`docker ps -a --format '{{.Names}}'` and `docker volume ls`.
+
+`autoport release` now says when a stack is still up rather than stranding it
+silently. The tidy order is `autoport compose down`, then `autoport release`,
+then delete the checkout.
+
+Anything a run holds that autoport did not create is the project's own to clean
+— a per-run build directory keyed on `AUTOPORT_RUN` accumulates one per run
+unless something removes it.
+
 ## Signatures
 
 **A dev server binds the old port anyway.** The value never reached it. Either the task runner filtered it out (turbo strict env — `autoport skills get setup`), or something exports that variable ahead of autoport, which autoport reports as `PORT is already set to … in the environment`.

@@ -36,4 +36,6 @@ Anything else a run holds exclusively — a socket path, a pidfile, a SQLite fil
 
 ## What a run does not survive
 
-A lease is released when the run exits, including on Ctrl-C. A `SIGKILL` or a crash leaves it to the six-hour reclaim. `autoport release` returns a project's ports by hand; it does not stop containers, so run `autoport compose down` first.
+A lease is released when the run exits, including on Ctrl-C. A `SIGKILL` or a crash leaves it to the six-hour reclaim. `autoport release` returns a project's ports by hand; it does not stop containers, so run `autoport compose down` first, and `autoport prune` for a checkout that is already gone.
+
+A per-run build directory is the project's to clean, not autoport's: one is left behind per run unless the dev script removes it.

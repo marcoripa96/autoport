@@ -378,7 +378,10 @@ share looks exactly like a deleted directory.
   `autoport doctor` checks what might be wrong, so a bad guess is visible.
 - `autoport compose` needs docker running. The library and `autoport env` do not.
 - `autoport release` returns ports; it does not stop containers or remove
-  volumes. Run `autoport compose down` first.
+  volumes. Run `autoport compose down` first — it says when a stack is still up.
+  For a checkout that is already gone, `autoport prune` finds the stacks nothing
+  names any more and `--yes` removes them. It works from the lease, so run it
+  before the lease is dropped a fortnight later.
 - A service publishing a port autoport does not know about gets a warning, not a
   lease — catalogued secondary ports (MinIO's console, Mailpit's UI,
   Elasticsearch's transport port) are leased.
