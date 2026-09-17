@@ -21,6 +21,13 @@ interface ComposeModel {
   [key: string]: unknown;
 }
 
+/** Docker's project names are `[a-z0-9][a-z0-9_-]*`; ours may not be. */
+export const composeProjectName = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "") || "autoport";
+
 /**
  * Ask docker for the fully resolved model rather than re-reading the YAML.
  *
@@ -170,8 +177,11 @@ export const composeCommand = async (args: string[]): Promise<number> => {
   for (const [key, value] of Object.entries(project.resources)) {
     if (env[key] === undefined || env[key] === "") env[key] = String(value);
   }
-  // Set before resolution so volumes and networks are namespaced too.
-  env.COMPOSE_PROJECT_NAME = project.name;
+  // Set before resolution so volumes and networks are namespaced too. Docker
+  // only accepts [a-z0-9_-], and an instance name arrives as `shop#e2e`, so the
+  // name is flattened rather than passed through — a run's containers and
+  // volumes are its own, which is most of what makes a second run independent.
+  env.COMPOSE_PROJECT_NAME = composeProjectName(project.name);
 
   let model: ComposeModel;
   try {

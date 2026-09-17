@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyPorts } from "../src/commands/compose.ts";
 import { resolveProject, resolveSync } from "../src/resolve.ts";
-import { release } from "../src/leases.ts";
+import { readLeases, release } from "../src/leases.ts";
 import { renderTypes, TYPES_FILE } from "../src/typegen.ts";
 
 const CLI = join(import.meta.dir, "..", "src", "cli.ts");
@@ -214,6 +214,38 @@ describe("cli", () => {
     const { code, stdout } = await run(["only-local"]);
     expect(code).toBe(0);
     expect(stdout).toContain("postgres://postgres:secret@127.0.0.1:");
+  });
+
+  it("gives a second concurrent run its own ports", async () => {
+    writeFileSync(join(root, "autoport.config.json"), JSON.stringify({ reserve: ["web"] }));
+    const first = JSON.parse((await run(["env", "--json"])).stdout) as Record<string, number>;
+    const held = first.WEB_PORT;
+    expect(held).toBeNumber();
+
+    // Stand on the port this project hands its host process, as a dev server
+    // already running from another terminal would.
+    const blocker = Bun.serve({ port: held, fetch: () => new Response("busy") });
+    try {
+      const { stdout, stderr } = await run(["--", "printenv", "WEB_PORT"]);
+      expect(stderr).toContain("already serving");
+      expect(Number(stdout.trim())).toBeNumber();
+      expect(Number(stdout.trim())).not.toBe(held);
+    } finally {
+      blocker.stop(true);
+    }
+  });
+
+  it("keeps one run's ports across nested autoport calls", async () => {
+    const { stdout } = await run(["--", "sh", "-c", "echo $AUTOPORT_RUN"], {
+      AUTOPORT_RUN: "run-fixed",
+    });
+    expect(stdout.trim()).toBe("run-fixed");
+  });
+
+  it("releases an anonymous run's lease when the run ends", async () => {
+    await run(["--fresh", "--", "true"]);
+    const keys = Object.keys(readLeases().projects);
+    expect(keys.filter((key) => key.includes("#run-"))).toBeEmpty();
   });
 
   it("writes a dotenv file for tools that cannot be wrapped", async () => {

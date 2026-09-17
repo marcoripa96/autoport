@@ -8,6 +8,7 @@ import { inferServices } from "./infer.ts";
 import { acquire, configuredRange, leaseHome, readLeases, type PortRequest } from "./leases.ts";
 import { findProject, projectName, type ProjectLayout } from "./project.ts";
 import { renderResources, urlFor } from "./render.ts";
+import { currentInstance } from "./session.ts";
 import { renderTypes, TYPES_FILE } from "./typegen.ts";
 import type {
   ResolvedPort,
@@ -135,15 +136,30 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
   const specs = applyOverrides(inference.services, config);
   const warnings: Warning[] = [...inference.warnings];
 
+  // A parallel run can ask for its own set of ports without disturbing the dev
+  // server that is already using this project's — named by the user, or minted
+  // by an outer autoport and inherited through the environment.
+  const instance = currentInstance();
+
+  // The canonical port belongs to the project's own set, so an extra run does
+  // not try 5432 first: a solo project should still land there, and a second
+  // run of it should not take it away from the first the moment the first is
+  // stopped.
+  const preferred = (port: number): number => (instance ? 0 : port);
+
   const requests: PortRequest[] = [];
   for (const spec of specs) {
     if (spec.canonicalPort > 0) {
-      requests.push({ name: spec.name, canonicalPort: spec.canonicalPort, managed: spec.managed });
+      requests.push({
+        name: spec.name,
+        canonicalPort: preferred(spec.canonicalPort),
+        managed: spec.managed,
+      });
     }
     for (const extra of spec.extraPorts) {
       requests.push({
         name: leaseKeyFor(spec.name, extra.role),
-        canonicalPort: extra.canonicalPort,
+        canonicalPort: preferred(extra.canonicalPort),
         managed: spec.managed,
       });
     }
@@ -154,9 +170,6 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
     }
   }
 
-  // A parallel test run can ask for its own set of ports without disturbing the
-  // dev server that is already using this project's.
-  const instance = process.env.AUTOPORT_INSTANCE;
   const leaseKey = instance ? `${root}#${instance}` : root;
 
   const acquired = acquire(
@@ -257,7 +270,16 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
   return project;
 };
 
-export const cachePath = (appDir: string): string => join(appDir, CACHE_DIR, "resolved.json");
+/**
+ * Where a resolution is cached.
+ *
+ * Named per instance, because two concurrent runs of one directory each hold
+ * their own set of ports and would otherwise fight over a single file — the
+ * lease check below would reject the loser's cache every time, turning the
+ * cache into overhead for both.
+ */
+export const cachePath = (appDir: string, instance = currentInstance()): string =>
+  join(appDir, CACHE_DIR, instance ? `resolved.${instance}.json` : "resolved.json");
 
 const writeCache = (
   project: ResolvedProject,
@@ -347,7 +369,7 @@ export const readCache = (layout: ProjectLayout): CacheRead | undefined => {
   if (parsed?.version !== 2) return undefined;
   if (!same(parsed.fingerprint ?? {}, fingerprint(layout))) return undefined;
 
-  const instance = process.env.AUTOPORT_INSTANCE;
+  const instance = currentInstance();
   const lease = readLeases().projects[instance ? `${layout.root}#${instance}` : layout.root];
   if (!lease) return undefined;
   for (const service of Object.values(parsed.services ?? {})) {

@@ -6,8 +6,10 @@ import type { AutoportConfig } from "../config.ts";
 import { loadConfig } from "../config-loader.ts";
 import { detectDotenvConflicts } from "../conflicts.ts";
 import { findProject } from "../project.ts";
+import { probeFree, release } from "../leases.ts";
 import { findAppService } from "../render.ts";
 import { resolveProject } from "../resolve.ts";
+import { inRun, mintRun } from "../session.ts";
 import type { ResolvedProject } from "../types.ts";
 import { which } from "../which.ts";
 import { defaultCommand } from "./dev.ts";
@@ -180,18 +182,80 @@ const buildEnv = (project: ResolvedProject): NodeJS.ProcessEnv => {
   return env;
 };
 
+/**
+ * Ports this run would bind itself, as opposed to publish from a container.
+ *
+ * A datastore's port being busy is the normal case — the stack is up, and a
+ * second command against it should join that stack, not clone it. A *host*
+ * port being busy means another run of this project is already serving, which
+ * is the thing a fresh set exists to get out of the way of.
+ */
+const hostPorts = (project: ResolvedProject, reservations: string[] | undefined): number[] => {
+  const ports: number[] = [];
+  for (const service of Object.values(project.services)) {
+    if (service.containerPort === undefined) ports.push(service.port);
+  }
+  for (const name of reservations ?? []) {
+    const key = `${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`;
+    const value = project.resources[key];
+    if (typeof value === "number") ports.push(value);
+  }
+  return ports;
+};
+
+/**
+ * Give the run's ports back when it ends.
+ *
+ * An anonymous run is nobody's to reuse: the id lives in this process's
+ * environment and dies with it, so a lease left behind is garbage that the
+ * six-hour reclaim would otherwise have to collect.
+ *
+ * `exit` only. A SIGINT or SIGTERM handler would *replace* node's default
+ * termination, and this process must keep dying when it is told to — the run
+ * already forwards those to the child and returns when the child is gone, so
+ * the normal and interrupted paths both arrive here. A SIGKILL or a crash
+ * leaves the lease to the reclaim, which is what it is for.
+ */
+const releaseWhenDone = (key: string): void => {
+  process.on("exit", () => {
+    try {
+      release(key);
+    } catch {
+      // Losing a lease on the way out is the reclaim's problem, not a reason to
+      // fail the command that just finished.
+    }
+  });
+};
+
 export const runCommand = async (rawArgs: string[]): Promise<number> => {
   const noProxy = rawArgs.includes("--no-proxy");
-  const args = rawArgs.filter((arg) => arg !== "--no-proxy");
+  const fresh = rawArgs.includes("--fresh");
+  const args = rawArgs.filter((arg) => arg !== "--no-proxy" && arg !== "--fresh");
   const given = args[0] === "--" ? args.slice(1) : args;
 
   const layout = findProject();
   const config = await loadConfig(layout.root);
-  const project = resolveProject({
+  let project = resolveProject({
     layout,
     config,
     reservations: config?.reserve,
   });
+
+  // Run the same project twice and the second one gets a set of its own, rather
+  // than the first one's ports with something already on them. Only the
+  // outermost autoport decides this: once a run exists its id is in the
+  // environment, and every nested call joins it instead of splitting again.
+  if (!inRun()) {
+    const busy = hostPorts(project, config?.reserve).filter((port) => !probeFree(port));
+    if (fresh || busy.length > 0) {
+      const run = mintRun();
+      process.env.AUTOPORT_RUN = run;
+      project = resolveProject({ layout, config, reservations: config?.reserve });
+      releaseWhenDone(`${project.key}#${run}`);
+      const why = fresh ? "asked for a fresh set" : `${busy.join(", ")} already serving`;
+      process.stderr.write(`autoport: ${why} — this run has its own ports\n`);
+    }
+  }
 
   // Bare `autoport` runs whatever this project calls its dev script.
   const argv = given.length > 0 ? given : defaultCommand(project.appDir);

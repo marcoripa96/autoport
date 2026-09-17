@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { composeCommand } from "./commands/compose.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { envCommand } from "./commands/env.ts";
@@ -7,6 +9,20 @@ import { releaseCommand } from "./commands/release.ts";
 import { runCommand } from "./commands/run.ts";
 import { statusCommand } from "./commands/status.ts";
 import { whyCommand } from "./commands/why.ts";
+
+/**
+ * Read the version from the package rather than baking one in: the string is
+ * next to the code that ships it, so a release cannot disagree with `--version`.
+ */
+const version = (): string => {
+  if (process.env.npm_package_version) return process.env.npm_package_version;
+  try {
+    const path = join(import.meta.dirname, "..", "package.json");
+    return (JSON.parse(readFileSync(path, "utf8")) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+};
 
 const USAGE = `autoport — conflict-free ports for local dev stacks
 
@@ -25,6 +41,7 @@ const USAGE = `autoport — conflict-free ports for local dev stacks
                                drop leases so the ports can be reused
 
 Flags:
+  --fresh                      give this run its own ports, always
   --no-proxy                   do not route HTTP through portless
   --help, --version
 
@@ -65,7 +82,7 @@ const main = async (argv: string[]): Promise<number> => {
     return 0;
   }
   if (first === "--version" || first === "-v") {
-    process.stdout.write(`${process.env.npm_package_version ?? "0.1.0"}\n`);
+    process.stdout.write(`${version()}\n`);
     return 0;
   }
 

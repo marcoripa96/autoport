@@ -196,11 +196,43 @@ keys in `turbo.json`:
 build output and belong in the cache key. Nx's `inputs` and any runner with an
 allowlist need the same treatment.
 
-## Parallel runs
+## Running the same project twice
 
-`AUTOPORT_INSTANCE=<name>` gives a run its own set of ports against the same
-project, so a Playwright suite can bring up its own stack while the dev server
-keeps using the project's. Instance leases are reclaimed after six hours.
+Start a second run while the first is serving and it gets a set of its own,
+without being told to:
+
+```bash
+autoport            # web on 3000, db on 5432
+autoport            # autoport: 3000 already serving — this run has its own ports
+```
+
+The second run mints an id, leases a full set against it — its own database and
+cache as well as its own ports — and gives them all back when it exits. Nothing
+accumulates and there is nothing to clean up.
+
+Only the **outermost** autoport decides this. The run id is exported to the
+child, so every nested call inherits it: `autoport turbo run dev` splits once,
+and the `autoport` inside each task joins the run rather than splitting again.
+Which is also the rule for scripts — put the wrapper at the top:
+
+```jsonc
+// one run: the second command is a child of the first
+"services:up": "autoport bun run services:up:inner",
+"services:up:inner": "compose up -d --wait && bun run db:migrate",
+
+// two runs, two databases, and the migration misses the container
+"services:up": "autoport compose up -d --wait && autoport bun run db:migrate",
+```
+
+Escalation keys on **host** ports, not container ones. A datastore's port being
+busy means the stack is up and you want to join it; the dev server's port being
+busy means another run is already serving. `--fresh` forces a new set either
+way, and a stopped project always gets its own ports back rather than a new set.
+
+`AUTOPORT_INSTANCE=<name>` is the stable version of the same thing: a *named*
+set that persists across runs, for a side stack you want to keep — a Playwright
+database you re-use rather than re-seed. Named leases are reclaimed after six
+hours idle.
 
 ```bash
 AUTOPORT_INSTANCE=e2e autoport compose up -d
@@ -260,7 +292,8 @@ share looks exactly like a deleted directory.
 | `AUTOPORT=0` | stand down; resources come only from `process.env` |
 | `AUTOPORT_HOME` | lease directory, default `~/.autoport` |
 | `AUTOPORT_RANGE` | allocation range, e.g. `40000-45000` |
-| `AUTOPORT_INSTANCE` | a separate set of ports for this run |
+| `AUTOPORT_INSTANCE` | a named, persistent set of ports |
+| `AUTOPORT_RUN` | set by autoport for a run; inherited by children |
 | `AUTOPORT_TYPEGEN=0` | stop writing `autoport-env.d.ts` |
 | `AUTOPORT_QUIET=1` | suppress warnings |
 | `AUTOPORT_SILENCE` | comma-separated warning codes to suppress |
