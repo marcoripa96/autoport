@@ -231,6 +231,21 @@ Which is also the rule for scripts — put the wrapper at the top:
 "dev:all": "autoport bun run dev & autoport bun run open",
 ```
 
+**Ports are not the only thing two runs collide on.** A framework that takes an
+exclusive lock on its build directory — Next.js on `.next/lock`, for one — will
+refuse to start a second time in one directory however free the port is, and the
+error talks about the *first* server rather than the lock. Give each run its own
+directory from the run id autoport exports:
+
+```jsonc
+// apps/web/package.json
+"dev": "sh -c 'exec env ${AUTOPORT_RUN:+NEXT_DIST_DIR=.next-$AUTOPORT_RUN} next dev'"
+```
+
+Anything else a run holds exclusively — a socket path, a pidfile, a SQLite file —
+wants the same treatment. autoport leases ports; `AUTOPORT_RUN` is there to key
+the rest.
+
 Escalation keys on **host** ports for the same reason. A datastore's port being
 busy means the stack is up and you want to join it; the dev server's port being
 busy means another run is already serving. `--fresh` forces a new set either
