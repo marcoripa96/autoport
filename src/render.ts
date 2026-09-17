@@ -5,6 +5,9 @@ import type { ResolvedService, ServiceSpec, Warning } from "./types.ts";
 export const envKey = (name: string): string =>
   name.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
 
+/** The `*_PORT` resource key for a service or reservation name. */
+export const portKey = (name: string): string => `${envKey(name)}_PORT`;
+
 export const urlFor = (spec: ServiceSpec, port: number): string => {
   const entry = findCatalogEntry(spec.type);
   if (entry) return entry.url({ port, meta: spec.meta, name: spec.name, command: spec.command });

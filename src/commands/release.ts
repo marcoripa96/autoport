@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { readLeases, release, releaseAll } from "../leases.ts";
 import { findProject } from "../project.ts";
-import { CACHE_DIR } from "../resolve.ts";
+import { cacheFiles } from "../resolve.ts";
 
 const USAGE = `usage: autoport release [--all --yes]
 
@@ -38,9 +38,10 @@ export const releaseCommand = (args: string[]): number => {
 
   const layout = findProject();
   const had = release(layout.root);
-  // The cache records the ports we just gave up, so it has to go with them.
+  // The cache records the ports we just gave up, so it has to go with them —
+  // every run's, not just this process's: each one names a file of its own.
   for (const dir of new Set([layout.root, layout.appDir ?? layout.root])) {
-    rmSync(join(dir, CACHE_DIR, "resolved.json"), { force: true });
+    for (const file of cacheFiles(dir)) rmSync(file, { force: true });
   }
   process.stderr.write(
     had ? `autoport: released ${layout.root}\n` : `autoport: nothing leased for ${layout.root}\n`,

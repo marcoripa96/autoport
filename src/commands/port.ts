@@ -1,4 +1,5 @@
 import { loadConfig } from "../config-loader.ts";
+import { portKey } from "../render.ts";
 import { findProject } from "../project.ts";
 import { resolveProject } from "../resolve.ts";
 
@@ -22,7 +23,7 @@ export const portCommand = async (args: string[]): Promise<number> => {
     reservations: [name],
   });
 
-  const key = `${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`;
+  const key = portKey(name);
   const port = project.resources[key];
   if (port === undefined) {
     process.stderr.write(`autoport: could not reserve a port for "${name}"\n`);

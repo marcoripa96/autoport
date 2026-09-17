@@ -34,6 +34,10 @@ const RETIRE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 const RETIRE_INSTANCE_AFTER_MS = 6 * 60 * 60 * 1000;
 
 /** A lease key may carry an `#instance` suffix; the directory is the part before it. */
+/** Lease key for a project, or for one run against it. */
+export const projectLeaseKey = (root: string, instance?: string): string =>
+  instance ? `${root}#${instance}` : root;
+
 export const leaseDirectory = (key: string): string => key.split("#")[0]!;
 export const isInstanceKey = (key: string): boolean => key.includes("#");
 /** How long a lock may be held before another process assumes the holder died. */

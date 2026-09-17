@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyPorts } from "../src/commands/compose.ts";
@@ -259,10 +267,30 @@ describe("cli", () => {
     expect(stdout.trim()).toBe("run-fixed");
   });
 
-  it("releases an anonymous run's lease when the run ends", async () => {
-    await run(["--fresh", "--", "true"]);
+  it("gives --fresh its own ports even when nothing is listening", async () => {
+    const stable = JSON.parse((await run(["env", "--json"])).stdout) as Record<string, number>;
+    const { code, stdout } = await run(["--fresh", "--", "printenv", "PORT"]);
+    expect(code).toBe(0);
+    expect(Number(stdout.trim())).toBeNumber();
+    expect(Number(stdout.trim())).not.toBe(stable.PORT);
+  });
+
+  it("releases an anonymous run's lease and cache when the run ends", async () => {
+    const { code } = await run(["--fresh", "--", "true"]);
+    expect(code).toBe(0);
     const keys = Object.keys(readLeases().projects);
     expect(keys.filter((key) => key.includes("#run-"))).toBeEmpty();
+    const left = readdirSync(join(root, ".autoport")).filter((name) =>
+      /^resolved\..+\.json$/.test(name),
+    );
+    expect(left).toBeEmpty();
+  });
+
+  it("removes every run's cache on release, not just the project's", async () => {
+    mkdirSync(join(root, ".autoport"), { recursive: true });
+    writeFileSync(join(root, ".autoport", "resolved.run-dead.json"), "{}");
+    await run(["release"]);
+    expect(existsSync(join(root, ".autoport", "resolved.run-dead.json"))).toBe(false);
   });
 
   it("writes a dotenv file for tools that cannot be wrapped", async () => {

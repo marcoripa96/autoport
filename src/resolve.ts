@@ -1,13 +1,28 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import type { AutoportConfig } from "./config.ts";
 import { findComposeFiles } from "./compose.ts";
 import { detectDotenvConflicts } from "./conflicts.ts";
 import { APP_ENV_FILES } from "./dotenv.ts";
 import { inferServices } from "./infer.ts";
-import { acquire, configuredRange, leaseHome, readLeases, type PortRequest } from "./leases.ts";
+import {
+  acquire,
+  configuredRange,
+  leaseHome,
+  projectLeaseKey,
+  readLeases,
+  type PortRequest,
+} from "./leases.ts";
 import { findProject, projectName, type ProjectLayout } from "./project.ts";
-import { renderResources, urlFor } from "./render.ts";
+import { portKey, renderResources, urlFor } from "./render.ts";
 import { currentInstance, isAnonymousRun } from "./session.ts";
 import { renderTypes, TYPES_FILE } from "./typegen.ts";
 import type {
@@ -61,7 +76,7 @@ const fingerprint = (layout: ProjectLayout): Fingerprint => {
   stamp(join(leaseHome(), "leases.json"), "leases");
   out.home = leaseHome();
   out.range = configuredRange().join("-");
-  out.instance = process.env.AUTOPORT_INSTANCE ?? "";
+  out.instance = currentInstance() ?? "";
   return out;
 };
 
@@ -181,7 +196,7 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
     }
   }
 
-  const leaseKey = instance ? `${root}#${instance}` : root;
+  const leaseKey = projectLeaseKey(root, instance);
   const stableName = (taken: (name: string) => boolean) =>
     config?.name ?? projectName(root, taken);
   const instanceName = () => `${config?.name ?? projectName(root, () => false)}#${instance}`;
@@ -192,23 +207,22 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
   // that will not exist by the time anyone tears it down.
   const hostRequests = requests.filter((request) => hostNames.has(request.name));
   const sharedRequests = requests.filter((request) => !hostNames.has(request.name));
+
+  /** Two leases for one resolve: the run's host ports, the project's stack. */
+  const acquireSplit = () => {
+    const shared = acquire(root, stableName, sharedRequests, config?.range);
+    const own = acquire(leaseKey, instanceName, hostRequests, config?.range);
+    return {
+      grants: { ...shared.grants, ...own.grants },
+      name: shared.name,
+      warnings: [...shared.warnings, ...own.warnings],
+    };
+  };
+
   const acquired =
     anonymous && hostRequests.length > 0
-      ? (() => {
-          const shared = acquire(root, stableName, sharedRequests, config?.range);
-          const own = acquire(leaseKey, instanceName, hostRequests, config?.range);
-          return {
-            grants: { ...shared.grants, ...own.grants },
-            name: shared.name,
-            warnings: [...shared.warnings, ...own.warnings],
-          };
-        })()
-      : acquire(
-          leaseKey,
-          instance ? instanceName : stableName,
-          requests,
-          config?.range,
-        );
+      ? acquireSplit()
+      : acquire(leaseKey, instance ? instanceName : stableName, requests, config?.range);
   for (const message of acquired.warnings) warnings.push({ code: "lease", message });
 
   const services: Record<string, ResolvedService> = {};
@@ -269,7 +283,7 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
   const provenance = { ...rendered.provenance };
   for (const [name, port] of Object.entries(acquired.grants)) {
     if (name.includes(":") || name in services) continue;
-    resources[`${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`] = port.port;
+    resources[portKey(name)] = port.port;
   }
 
   for (const [key, value] of Object.entries(config?.resources?.(services) ?? {})) {
@@ -306,8 +320,22 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
  * lease check below would reject the loser's cache every time, turning the
  * cache into overhead for both.
  */
-export const cachePath = (appDir: string, instance = currentInstance()): string =>
-  join(appDir, CACHE_DIR, instance ? `resolved.${instance}.json` : "resolved.json");
+export const cachePath = (appDir: string): string => {
+  const instance = currentInstance();
+  return join(appDir, CACHE_DIR, instance ? `resolved.${instance}.json` : "resolved.json");
+};
+
+/** Every resolution cache under `appDir`, whatever run wrote it. */
+export const cacheFiles = (appDir: string): string[] => {
+  const dir = join(appDir, CACHE_DIR);
+  try {
+    return readdirSync(dir)
+      .filter((name) => name === "resolved.json" || /^resolved\..+\.json$/.test(name))
+      .map((name) => join(dir, name));
+  } catch {
+    return [];
+  }
+};
 
 const writeCache = (
   project: ResolvedProject,
@@ -397,13 +425,25 @@ export const readCache = (layout: ProjectLayout): CacheRead | undefined => {
   if (parsed?.version !== 2) return undefined;
   if (!same(parsed.fingerprint ?? {}, fingerprint(layout))) return undefined;
 
+  // Check each port against the lease it actually lives in. An anonymous run
+  // holds only its host ports; the container-backed ones stayed on the
+  // project's lease, and checking those against the run's would reject every
+  // cache this run ever writes.
   const instance = currentInstance();
-  const lease = readLeases().projects[instance ? `${layout.root}#${instance}` : layout.root];
-  if (!lease) return undefined;
+  const leases = readLeases().projects;
+  const own = instance ? leases[projectLeaseKey(layout.root, instance)] : undefined;
+  const shared = leases[layout.root];
+  if (!(own ?? shared)) return undefined;
+  if (instance && !own) return undefined;
+
+  const leasedPort = (name: string, host: boolean): number | undefined =>
+    (host ? (own ?? shared) : (isAnonymousRun() ? shared : (own ?? shared)))?.services[name];
+
   for (const service of Object.values(parsed.services ?? {})) {
-    if (lease.services[service.name] !== service.port) return undefined;
+    const host = service.containerPort === undefined;
+    if (leasedPort(service.name, host) !== service.port) return undefined;
     for (const extra of Object.values(service.extras ?? {})) {
-      if (lease.services[`${service.name}:${extra.role}`] !== extra.port) return undefined;
+      if (leasedPort(`${service.name}:${extra.role}`, host) !== extra.port) return undefined;
     }
   }
 

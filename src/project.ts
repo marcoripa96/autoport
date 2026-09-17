@@ -86,6 +86,16 @@ const packageName = (dir: string): string | undefined => {
 };
 
 /**
+ * A name safe for the places one gets used verbatim: a docker project
+ * (`[a-z0-9][a-z0-9_-]*`) and a DNS label in a proxy hostname.
+ */
+export const safeLabel = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "") || "autoport";
+
+/**
  * Human-readable label. Two worktrees of `shop` become `shop` and `shop-4f1a2c`,
  * which is also what keeps their docker container names apart.
  */

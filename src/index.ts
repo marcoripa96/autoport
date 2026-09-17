@@ -1,6 +1,6 @@
 import { inspect } from "node:util";
 import { findProject } from "./project.ts";
-import { findAppService, urlFor } from "./render.ts";
+import { findAppService, portKey, urlFor } from "./render.ts";
 import { resolveProject, resolveSync } from "./resolve.ts";
 import type { ResolvedProject, ResolvedService } from "./types.ts";
 
@@ -114,7 +114,7 @@ const adoptAmbientPort = (project: ResolvedProject): ResolvedProject => {
   project.services[app.name] = updated;
   project.resources.PORT = ambient;
   project.resources.APP_URL = updated.url;
-  project.resources[`${app.name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`] = ambient;
+  project.resources[portKey(app.name)] = ambient;
   return project;
 };
 
@@ -238,7 +238,7 @@ export const services = new Proxy(serviceTarget as ServiceMap, {
  * worker, a websocket server. Stable for this project across restarts.
  */
 export const reservePort = (name: string): number => {
-  const ambient = process.env[`${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`];
+  const ambient = process.env[portKey(name)];
   if (ambient) {
     const value = Number(ambient);
     if (Number.isFinite(value)) return value;
@@ -248,7 +248,7 @@ export const reservePort = (name: string): number => {
   const project = resolveProject({ layout, reservations: [name] });
   state = undefined;
   stateKey = undefined;
-  const key = `${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`;
+  const key = portKey(name);
   const port = project.resources[key];
   if (typeof port !== "number") throw new Error(`autoport: could not reserve a port for "${name}"`);
   return port;

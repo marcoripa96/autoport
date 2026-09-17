@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { stringify } from "yaml";
 import { findComposeFiles } from "../compose.ts";
 import { loadConfig } from "../config-loader.ts";
-import { findProject } from "../project.ts";
+import { findProject, safeLabel } from "../project.ts";
 import { CACHE_DIR, resolveProject } from "../resolve.ts";
 import type { ResolvedProject } from "../types.ts";
 import { exec } from "./run.ts";
@@ -20,13 +20,6 @@ interface ComposeModel {
   services?: Record<string, { ports?: unknown[] }>;
   [key: string]: unknown;
 }
-
-/** Docker's project names are `[a-z0-9][a-z0-9_-]*`; ours may not be. */
-export const composeProjectName = (name: string): string =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^[^a-z0-9]+/, "") || "autoport";
 
 /**
  * Ask docker for the fully resolved model rather than re-reading the YAML.
@@ -181,7 +174,7 @@ export const composeCommand = async (args: string[]): Promise<number> => {
   // only accepts [a-z0-9_-], and an instance name arrives as `shop#e2e`, so the
   // name is flattened rather than passed through — a run's containers and
   // volumes are its own, which is most of what makes a second run independent.
-  env.COMPOSE_PROJECT_NAME = composeProjectName(project.name);
+  env.COMPOSE_PROJECT_NAME = safeLabel(project.name);
 
   let model: ComposeModel;
   try {

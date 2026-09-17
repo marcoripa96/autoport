@@ -51,6 +51,7 @@ Environment:
   AUTOPORT_RANGE        allocation range, e.g. 40000-45000
   AUTOPORT_TYPEGEN=0    stop writing autoport-env.d.ts
   AUTOPORT_QUIET=1      suppress warnings
+  AUTOPORT_RUN          this run's id; set by autoport, inherited by children
   AUTOPORT_SILENCE      comma-separated warning codes to suppress
 `;
 
@@ -72,7 +73,7 @@ const SUBCOMMANDS: Record<string, (args: string[]) => number | Promise<number>> 
 };
 
 /** Flags autoport itself understands before a command. */
-const GLOBAL_FLAGS = new Set(["--no-proxy"]);
+const GLOBAL_FLAGS = new Set(["--no-proxy", "--fresh"]);
 
 const main = async (argv: string[]): Promise<number> => {
   const [first, ...rest] = argv;

@@ -1,15 +1,15 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { findFrameworkByType, flagValue, type FrameworkEntry } from "../catalog.ts";
 import type { AutoportConfig } from "../config.ts";
 import { loadConfig } from "../config-loader.ts";
 import { detectDotenvConflicts } from "../conflicts.ts";
-import { findProject } from "../project.ts";
-import { probeFree, release } from "../leases.ts";
-import { findAppService } from "../render.ts";
-import { resolveProject } from "../resolve.ts";
-import { inRun, mintRun } from "../session.ts";
+import { findProject, safeLabel } from "../project.ts";
+import { probeFree, projectLeaseKey, release } from "../leases.ts";
+import { findAppService, portKey } from "../render.ts";
+import { cachePath, resolveProject } from "../resolve.ts";
+import { inRun, isAnonymousRun, mintRun } from "../session.ts";
 import type { ResolvedProject } from "../types.ts";
 import { which } from "../which.ts";
 import { defaultCommand } from "./dev.ts";
@@ -128,13 +128,20 @@ const withProxy = (
     return { argv };
   }
 
-  const hostname = `https://${project.name}.localhost`;
+  // A run's dev server is its own, so it needs a hostname of its own: the
+  // project name is deliberately shared between concurrent runs (the stack is),
+  // and two of them registering one name with portless would leave APP_URL in
+  // the second run pointing at the first one's port.
+  const label = safeLabel(
+    isAnonymousRun() ? `${project.name}-${process.env.AUTOPORT_RUN}` : project.name,
+  );
+  const hostname = `https://${label}.localhost`;
   env.APP_URL = hostname;
   // portless assigns the HTTP port itself and injects framework flags for the
   // dev servers that need them, so ours must not also be applied.
   delete env.PORT;
   env.AUTOPORT_ADOPT_PORT = "1";
-  return { argv: [portless, project.name, ...argv], hostname };
+  return { argv: [portless, label, ...argv], hostname };
 };
 
 /**
@@ -196,7 +203,7 @@ const hostPorts = (project: ResolvedProject, reservations: string[] | undefined)
     if (service.containerPort === undefined) ports.push(service.port);
   }
   for (const name of reservations ?? []) {
-    const key = `${name.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}_PORT`;
+    const key = portKey(name);
     const value = project.resources[key];
     if (typeof value === "number") ports.push(value);
   }
@@ -216,10 +223,12 @@ const hostPorts = (project: ResolvedProject, reservations: string[] | undefined)
  * the normal and interrupted paths both arrive here. A SIGKILL or a crash
  * leaves the lease to the reclaim, which is what it is for.
  */
-const releaseWhenDone = (key: string): void => {
+const releaseWhenDone = (key: string, cache: string): void => {
   process.on("exit", () => {
     try {
       release(key);
+      // The cache names this run's ports, and the run is over.
+      rmSync(cache, { force: true });
     } catch {
       // Losing a lease on the way out is the reclaim's problem, not a reason to
       // fail the command that just finished.
@@ -251,7 +260,7 @@ export const runCommand = async (rawArgs: string[]): Promise<number> => {
       const run = mintRun();
       process.env.AUTOPORT_RUN = run;
       project = resolveProject({ layout, config, reservations: config?.reserve });
-      releaseWhenDone(`${project.key}#${run}`);
+      releaseWhenDone(projectLeaseKey(project.key, run), cachePath(project.appDir));
       const why = fresh ? "asked for a fresh set" : `${busy.join(", ")} already serving`;
       process.stderr.write(`autoport: ${why} — this run has its own ports\n`);
     }
