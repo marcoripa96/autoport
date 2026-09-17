@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { findFrameworkByType, flagValue, type FrameworkEntry } from "../catalog.ts";
 import type { AutoportConfig } from "../config.ts";
 import { loadConfig } from "../config-loader.ts";
@@ -136,6 +136,21 @@ const withProxy = (
 };
 
 /**
+ * Put the project's own `node_modules/.bin` in front, as npm and bun do for the
+ * scripts they run. `autoport vitest` typed at a shell is otherwise a spawn
+ * ENOENT for a binary that is plainly installed, and wrapping a dependency is
+ * most of what autoport is for.
+ */
+const withLocalBin = (project: ResolvedProject, path: string | undefined): string => {
+  const dirs: string[] = [];
+  for (const dir of new Set([project.appDir, project.key])) {
+    const bin = join(dir, "node_modules", ".bin");
+    if (existsSync(bin)) dirs.push(bin);
+  }
+  return [...dirs, ...(path ? [path] : [])].join(delimiter);
+};
+
+/**
  * Build the child's environment.
  *
  * A value already exported wins, because that is how CI and production override
@@ -144,6 +159,7 @@ const withProxy = (
  */
 const buildEnv = (project: ResolvedProject): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = { ...process.env };
+  env.PATH = withLocalBin(project, env.PATH);
   const { fileSourced } = detectDotenvConflicts(project.appDir, project.resources);
 
   for (const [key, value] of Object.entries(project.resources)) {

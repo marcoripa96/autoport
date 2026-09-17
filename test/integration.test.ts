@@ -206,6 +206,16 @@ describe("cli", () => {
     expect(resources.WEB_PORT).not.toBe(resources.REALTIME_PORT);
   });
 
+  it("runs a binary from the project's own node_modules/.bin", async () => {
+    const bin = join(root, "node_modules", ".bin");
+    mkdirSync(bin, { recursive: true });
+    const script = join(bin, "only-local");
+    writeFileSync(script, "#!/bin/sh\necho $DATABASE_URL\n", { mode: 0o755 });
+    const { code, stdout } = await run(["only-local"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("postgres://postgres:secret@127.0.0.1:");
+  });
+
   it("writes a dotenv file for tools that cannot be wrapped", async () => {
     await run(["env", "--write", ".env.autoport"]);
     expect(readFileSync(join(root, ".env.autoport"), "utf8")).toContain("DATABASE_URL=");

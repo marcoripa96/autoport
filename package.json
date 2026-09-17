@@ -1,6 +1,6 @@
 {
   "name": "@mr96/autoport",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Automatic, conflict-free port allocation for local dev stacks.",
   "type": "module",
   "license": "MIT",
@@ -43,7 +43,7 @@
     "build": "bun build ./src/index.ts ./src/config.ts ./src/browser.ts ./src/cli.ts --outdir dist --target node --format esm --external yaml && tsc --emitDeclarationOnly",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build"
+    "prepack": "bun test && bun run build"
   },
   "dependencies": {
     "yaml": "^2.6.1"

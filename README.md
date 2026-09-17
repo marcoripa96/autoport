@@ -182,6 +182,20 @@ shop/
 Both get the same `DATABASE_URL` and different `PORT`s, and neither evicts the
 other's lease. A framework hoisted to the root `package.json` is found too.
 
+**Task runners that filter the environment.** Turborepo 2 runs tasks in strict
+env mode, so a variable autoport exports is not visible to the task unless it is
+declared — the task falls back to whatever default your env layer holds, and the
+symptom is a dev server binding the port you were trying to move off. Name the
+keys in `turbo.json`:
+
+```jsonc
+{ "globalEnv": ["POSTGRES_PORT", "REDIS_PORT", "WEB_PORT"] }
+```
+
+`globalEnv` rather than `globalPassThroughEnv`, since the values change the
+build output and belong in the cache key. Nx's `inputs` and any runner with an
+allowlist need the same treatment.
+
 ## Parallel runs
 
 `AUTOPORT_INSTANCE=<name>` gives a run its own set of ports against the same
