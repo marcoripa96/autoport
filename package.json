@@ -1,6 +1,6 @@
 {
   "name": "@mr96/autoport",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Automatic, conflict-free port allocation for local dev stacks.",
   "type": "module",
   "license": "MIT",
