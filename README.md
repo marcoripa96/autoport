@@ -154,8 +154,16 @@ and every container-to-container link crossing checkouts.
 
 ## Stable hostnames
 
-If [portless](https://portless.sh) is installed, autoport uses it. Still one
-command:
+If [portless](https://portless.sh) is installed, autoport uses it — as a dev
+dependency of the project as readily as a global install, so a checkout carries
+its own proxy and a teammate needs no setup step:
+
+```bash
+bun add -D portless
+```
+
+It is declared as an optional peer, so nothing installs it for you and autoport
+is complete without it. Still one command:
 
 ```bash
 autoport

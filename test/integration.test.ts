@@ -232,6 +232,20 @@ describe("cli", () => {
     expect(resources.WEB_PORT).not.toBe(resources.REALTIME_PORT);
   });
 
+  it("finds a portless installed as a dev dependency, not only a global one", async () => {
+    const bin = join(root, "node_modules", ".bin");
+    mkdirSync(bin, { recursive: true });
+    // Stands in for portless: prints the name autoport registered, so the
+    // assertion is about the lookup rather than about the proxy.
+    writeFileSync(join(bin, "portless"), '#!/bin/sh\necho "portless-got $1"\n', { mode: 0o755 });
+
+    // PATH deliberately excludes the bin directory: a dev dependency is on PATH
+    // under `npm run` and not when autoport is invoked directly, and the point
+    // is that both behave the same.
+    const { stdout } = await run(["--", "true"], { AUTOPORT_PROXY: "", PATH: process.env.PATH! });
+    expect(stdout).toContain("portless-got");
+  });
+
   it("runs a binary from the project's own node_modules/.bin", async () => {
     const bin = join(root, "node_modules", ".bin");
     mkdirSync(bin, { recursive: true });

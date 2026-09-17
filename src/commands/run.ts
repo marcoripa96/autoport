@@ -125,7 +125,7 @@ const proxyLabel = (
   if (disabled || (config?.proxy ?? "auto") === false) return undefined;
   if (!findAppService(project.services)) return undefined;
   if (process.env.AUTOPORT_ADOPT_PORT === "1") return undefined;
-  if (!which("portless")) return undefined;
+  if (!which("portless", localBins(project))) return undefined;
   // A run's dev server is its own, so it needs a hostname of its own: the
   // project name is deliberately shared between concurrent runs (the stack is),
   // and two of them registering one name with portless would leave APP_URL in
@@ -143,7 +143,7 @@ const withProxy = (
   disabled: boolean,
 ): { argv: string[]; hostname?: string } => {
   const mode = config?.proxy ?? "auto";
-  const portless = which("portless");
+  const portless = which("portless", localBins(project));
   if (!portless && mode === "portless" && !disabled) {
     process.stderr.write("autoport: proxy is set to portless, but portless is not installed\n");
   }
@@ -164,14 +164,17 @@ const withProxy = (
  * ENOENT for a binary that is plainly installed, and wrapping a dependency is
  * most of what autoport is for.
  */
-const withLocalBin = (project: ResolvedProject, path: string | undefined): string => {
+const localBins = (project: ResolvedProject): string[] => {
   const dirs: string[] = [];
   for (const dir of new Set([project.appDir, project.key])) {
     const bin = join(dir, "node_modules", ".bin");
     if (existsSync(bin)) dirs.push(bin);
   }
-  return [...dirs, ...(path ? [path] : [])].join(delimiter);
+  return dirs;
 };
+
+const withLocalBin = (project: ResolvedProject, path: string | undefined): string =>
+  [...localBins(project), ...(path ? [path] : [])].join(delimiter);
 
 /**
  * Build the child's environment.

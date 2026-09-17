@@ -48,6 +48,14 @@
   "dependencies": {
     "yaml": "^2.6.1"
   },
+  "peerDependencies": {
+    "portless": ">=0.15"
+  },
+  "peerDependenciesMeta": {
+    "portless": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.7.2"
