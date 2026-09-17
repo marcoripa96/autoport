@@ -8,7 +8,7 @@ import { inferServices } from "./infer.ts";
 import { acquire, configuredRange, leaseHome, readLeases, type PortRequest } from "./leases.ts";
 import { findProject, projectName, type ProjectLayout } from "./project.ts";
 import { renderResources, urlFor } from "./render.ts";
-import { currentInstance } from "./session.ts";
+import { currentInstance, isAnonymousRun } from "./session.ts";
 import { renderTypes, TYPES_FILE } from "./typegen.ts";
 import type {
   ResolvedPort,
@@ -140,47 +140,75 @@ export const resolveProject = (options: ResolveOptions = {}): ResolvedProject =>
   // server that is already using this project's — named by the user, or minted
   // by an outer autoport and inherited through the environment.
   const instance = currentInstance();
+  const anonymous = isAnonymousRun();
+
+  // Ports this project's own processes bind, as opposed to ones a container
+  // publishes. Under an anonymous run only these move; see `isAnonymousRun`.
+  const hostNames = new Set<string>();
 
   // The canonical port belongs to the project's own set, so an extra run does
   // not try 5432 first: a solo project should still land there, and a second
   // run of it should not take it away from the first the moment the first is
   // stopped.
-  const preferred = (port: number): number => (instance ? 0 : port);
+  const preferred = (port: number, host: boolean): number =>
+    instance && (!anonymous || host) ? 0 : port;
 
   const requests: PortRequest[] = [];
   for (const spec of specs) {
+    const host = spec.containerPort === undefined;
     if (spec.canonicalPort > 0) {
+      if (host) hostNames.add(spec.name);
       requests.push({
         name: spec.name,
-        canonicalPort: preferred(spec.canonicalPort),
+        canonicalPort: preferred(spec.canonicalPort, host),
         managed: spec.managed,
       });
     }
     for (const extra of spec.extraPorts) {
+      const name = leaseKeyFor(spec.name, extra.role);
+      if (host) hostNames.add(name);
       requests.push({
-        name: leaseKeyFor(spec.name, extra.role),
-        canonicalPort: preferred(extra.canonicalPort),
+        name,
+        canonicalPort: preferred(extra.canonicalPort, host),
         managed: spec.managed,
       });
     }
   }
   for (const reservation of options.reservations ?? []) {
     if (!requests.some((request) => request.name === reservation)) {
+      hostNames.add(reservation);
       requests.push({ name: reservation, canonicalPort: 0, managed: true });
     }
   }
 
   const leaseKey = instance ? `${root}#${instance}` : root;
+  const stableName = (taken: (name: string) => boolean) =>
+    config?.name ?? projectName(root, taken);
+  const instanceName = () => `${config?.name ?? projectName(root, () => false)}#${instance}`;
 
-  const acquired = acquire(
-    leaseKey,
-    (taken) =>
-      instance
-        ? `${config?.name ?? projectName(root, () => false)}#${instance}`
-        : (config?.name ?? projectName(root, taken)),
-    requests,
-    config?.range,
-  );
+  // An anonymous run takes its host ports from a lease of its own and leaves
+  // everything else on the project's, so the stack it brings up is the stack
+  // the next command finds — and is named for the project, not for a run id
+  // that will not exist by the time anyone tears it down.
+  const hostRequests = requests.filter((request) => hostNames.has(request.name));
+  const sharedRequests = requests.filter((request) => !hostNames.has(request.name));
+  const acquired =
+    anonymous && hostRequests.length > 0
+      ? (() => {
+          const shared = acquire(root, stableName, sharedRequests, config?.range);
+          const own = acquire(leaseKey, instanceName, hostRequests, config?.range);
+          return {
+            grants: { ...shared.grants, ...own.grants },
+            name: shared.name,
+            warnings: [...shared.warnings, ...own.warnings],
+          };
+        })()
+      : acquire(
+          leaseKey,
+          instance ? instanceName : stableName,
+          requests,
+          config?.range,
+        );
   for (const message of acquired.warnings) warnings.push({ code: "lease", message });
 
   const services: Record<string, ResolvedService> = {};

@@ -29,3 +29,16 @@ export const inRun = (): boolean =>
  * collide — the whole point is that nothing coordinates them.
  */
 export const mintRun = (): string => `run-${randomBytes(4).toString("hex")}`;
+
+/**
+ * Is this an anonymous run, as opposed to a named instance?
+ *
+ * The distinction decides what a run gets to move. An anonymous run lasts
+ * exactly as long as one command, so it may only take ports it will give back:
+ * its own processes. Containers outlive it — `compose up -d` is the whole point
+ * of `-d` — so they stay on the project's set, and two runs share one stack.
+ * A *named* instance is the opposite: the user asked for a second stack and
+ * will tear it down themselves, so it moves everything.
+ */
+export const isAnonymousRun = (): boolean =>
+  !process.env.AUTOPORT_INSTANCE && Boolean(process.env.AUTOPORT_RUN);

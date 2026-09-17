@@ -235,6 +235,23 @@ describe("cli", () => {
     }
   });
 
+  it("leaves container-backed services on the project's ports during a run", async () => {
+    writeFileSync(join(root, "autoport.config.json"), JSON.stringify({ reserve: ["web"] }));
+    const stable = JSON.parse((await run(["env", "--json"])).stdout) as Record<string, number>;
+
+    const blocker = Bun.serve({ port: stable.WEB_PORT!, fetch: () => new Response("busy") });
+    try {
+      const { stdout } = await run(["--", "printenv", "WEB_PORT", "DB_PORT", "CACHE_PORT"]);
+      const [web, db, cache] = stdout.trim().split("\n").map(Number);
+      // The run's own process moves; the stack it would connect to does not.
+      expect(web).not.toBe(stable.WEB_PORT);
+      expect(db).toBe(stable.DB_PORT);
+      expect(cache).toBe(stable.CACHE_PORT);
+    } finally {
+      blocker.stop(true);
+    }
+  });
+
   it("keeps one run's ports across nested autoport calls", async () => {
     const { stdout } = await run(["--", "sh", "-c", "echo $AUTOPORT_RUN"], {
       AUTOPORT_RUN: "run-fixed",

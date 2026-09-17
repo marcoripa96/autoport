@@ -206,9 +206,16 @@ autoport            # web on 3000, db on 5432
 autoport            # autoport: 3000 already serving — this run has its own ports
 ```
 
-The second run mints an id, leases a full set against it — its own database and
-cache as well as its own ports — and gives them all back when it exits. Nothing
-accumulates and there is nothing to clean up.
+The second run mints an id, leases its own host ports against it, and gives them
+back when it exits. Nothing accumulates and there is nothing to clean up.
+
+**A run moves its own processes, not the stack.** Containers outlive the command
+that started them — `-d` is the point of `-d` — so they stay on the project's
+ports under the project's name, and both runs talk to the one Postgres that is
+actually up. A run whose containers were named after it would leave a stack
+behind that nothing could later find to tear down. If you want a second stack
+too, name it: `AUTOPORT_INSTANCE=e2e` moves everything, and is yours to bring
+down.
 
 Only the **outermost** autoport decides this. The run id is exported to the
 child, so every nested call inherits it: `autoport turbo run dev` splits once,
@@ -216,15 +223,15 @@ and the `autoport` inside each task joins the run rather than splitting again.
 Which is also the rule for scripts — put the wrapper at the top:
 
 ```jsonc
-// one run: the second command is a child of the first
-"services:up": "autoport bun run services:up:inner",
-"services:up:inner": "compose up -d --wait && bun run db:migrate",
+// one run: both commands are children of the wrapper, so both see one WEB_PORT
+"dev:all": "autoport bun run dev:all:inner",
+"dev:all:inner": "bun run dev & bun run wait-for-web && bun run open",
 
-// two runs, two databases, and the migration misses the container
-"services:up": "autoport compose up -d --wait && autoport bun run db:migrate",
+// two runs: siblings, so each mints its own and `open` opens the wrong port
+"dev:all": "autoport bun run dev & autoport bun run open",
 ```
 
-Escalation keys on **host** ports, not container ones. A datastore's port being
+Escalation keys on **host** ports for the same reason. A datastore's port being
 busy means the stack is up and you want to join it; the dev server's port being
 busy means another run is already serving. `--fresh` forces a new set either
 way, and a stopped project always gets its own ports back rather than a new set.
