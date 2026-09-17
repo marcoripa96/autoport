@@ -155,6 +155,17 @@ export const composeCommand = async (args: string[]): Promise<number> => {
     return 0;
   }
 
+  // A run is a set of host ports that ends with the command. Containers do not
+  // end with it, so compose is always the project's stack — and passing this
+  // through to docker as an unknown flag would be a worse way to say so.
+  if (args.includes("--fresh")) {
+    process.stderr.write(
+      "autoport: --fresh applies to a command, not to compose — containers outlive the run.\n" +
+        "  For a second stack of your own: AUTOPORT_INSTANCE=<name> autoport compose up -d\n",
+    );
+    return 2;
+  }
+
   const layout = findProject();
   const files = findComposeFiles(layout.root);
   if (files.length === 0) {

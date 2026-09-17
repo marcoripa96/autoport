@@ -267,6 +267,22 @@ describe("cli", () => {
     expect(stdout.trim()).toBe("run-fixed");
   });
 
+  it("answers --help and --version after a global flag", async () => {
+    expect((await run(["--fresh", "--help"])).stdout).toContain("conflict-free ports");
+    expect((await run(["--fresh", "--version"])).stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("leaves flags past -- to the command", async () => {
+    const { stderr } = await run(["--", "printenv", "--bogus"]);
+    expect(stderr).not.toContain("unknown flag");
+  });
+
+  it("refuses --fresh on compose, which outlives the run", async () => {
+    const { code, stderr } = await run(["compose", "--fresh", "up"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("AUTOPORT_INSTANCE");
+  });
+
   it("gives --fresh its own ports even when nothing is listening", async () => {
     const stable = JSON.parse((await run(["env", "--json"])).stdout) as Record<string, number>;
     const { code, stdout } = await run(["--fresh", "--", "printenv", "PORT"]);

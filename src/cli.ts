@@ -74,15 +74,24 @@ const SUBCOMMANDS: Record<string, (args: string[]) => number | Promise<number>> 
 
 /** Flags autoport itself understands before a command. */
 const GLOBAL_FLAGS = new Set(["--no-proxy", "--fresh"]);
+const isGlobalFlag = (arg: string): boolean => GLOBAL_FLAGS.has(arg);
 
 const main = async (argv: string[]): Promise<number> => {
   const [first, ...rest] = argv;
 
-  if (first === "--help" || first === "-h" || first === "help") {
+  // Asked for anywhere ahead of the command, not just first: `autoport --fresh
+  // --help` is a question about autoport, and answering it with "unknown flag"
+  // because a global flag came first is a riddle.
+  const end = argv.indexOf("--");
+  const leading = end === -1 ? argv : argv.slice(0, end);
+  const asked = (...names: string[]): boolean =>
+    leading.some((arg, index) => names.includes(arg) && leading.slice(0, index).every(isGlobalFlag));
+
+  if (first === "help" || asked("--help", "-h")) {
     process.stdout.write(USAGE);
     return 0;
   }
-  if (first === "--version" || first === "-v") {
+  if (asked("--version", "-v")) {
     process.stdout.write(`${version()}\n`);
     return 0;
   }
@@ -96,9 +105,11 @@ const main = async (argv: string[]): Promise<number> => {
     if (subcommand && !shadowed) return await subcommand(rest);
   }
 
-  const unknownFlag = argv.find((arg) => arg.startsWith("-") && arg !== "--" && !GLOBAL_FLAGS.has(arg));
-  const beforeCommand = argv.indexOf(unknownFlag ?? "") < argv.findIndex((arg) => !arg.startsWith("-"));
-  if (unknownFlag && (beforeCommand || !argv.some((arg) => !arg.startsWith("-")))) {
+  // Only what comes before `--` is addressed to autoport; past it the flags are
+  // the command's, however much they look like ours.
+  const unknownFlag = leading.find((arg) => arg.startsWith("-") && !isGlobalFlag(arg));
+  const beforeCommand = leading.indexOf(unknownFlag ?? "") < leading.findIndex((arg) => !arg.startsWith("-"));
+  if (unknownFlag && (beforeCommand || !leading.some((arg) => !arg.startsWith("-")))) {
     process.stderr.write(`autoport: unknown flag "${unknownFlag}"\n\n${USAGE}`);
     return 2;
   }
