@@ -40,7 +40,8 @@ export const envCommand = async (args: string[]): Promise<number> => {
   }
 
   const layout = findProject();
-  const project = resolveProject({ layout, config: await loadConfig(layout.root) });
+  const config = await loadConfig(layout.root);
+  const project = resolveProject({ layout, config, reservations: config?.reserve });
   printWarnings(project.warnings);
 
   if (args.includes("--json")) {

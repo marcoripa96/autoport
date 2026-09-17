@@ -194,6 +194,18 @@ describe("cli", () => {
     expect(JSON.parse(stdout).REDIS_URL).toStartWith("redis://");
   });
 
+  it("includes ports the config reserves, as the run and compose commands do", async () => {
+    writeFileSync(
+      join(root, "autoport.config.json"),
+      JSON.stringify({ reserve: ["web", "realtime"] }),
+    );
+    const { stdout } = await run(["env", "--json"]);
+    const resources = JSON.parse(stdout);
+    expect(resources.WEB_PORT).toBeNumber();
+    expect(resources.REALTIME_PORT).toBeNumber();
+    expect(resources.WEB_PORT).not.toBe(resources.REALTIME_PORT);
+  });
+
   it("writes a dotenv file for tools that cannot be wrapped", async () => {
     await run(["env", "--write", ".env.autoport"]);
     expect(readFileSync(join(root, ".env.autoport"), "utf8")).toContain("DATABASE_URL=");

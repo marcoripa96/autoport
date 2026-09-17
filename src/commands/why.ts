@@ -17,7 +17,8 @@ export const whyCommand = async (args: string[]): Promise<number> => {
   }
 
   const layout = findProject();
-  const project = resolveProject({ layout, config: await loadConfig(layout.root) });
+  const config = await loadConfig(layout.root);
+  const project = resolveProject({ layout, config, reservations: config?.reserve });
 
   const value = project.resources[key];
   if (value === undefined) {
