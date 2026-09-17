@@ -7,6 +7,7 @@ import { envCommand } from "./commands/env.ts";
 import { portCommand } from "./commands/port.ts";
 import { releaseCommand } from "./commands/release.ts";
 import { runCommand } from "./commands/run.ts";
+import { skillsCommand } from "./commands/skills.ts";
 import { statusCommand } from "./commands/status.ts";
 import { whyCommand } from "./commands/why.ts";
 
@@ -37,6 +38,7 @@ const USAGE = `autoport — conflict-free ports for local dev stacks
   autoport why <KEY>           explain where one value comes from
   autoport port <name>         lease a port for something not inferred
   autoport doctor              check what might be making autoport wrong
+  autoport skills [get <name>] how autoport works, for an agent to read
   autoport release [--all --yes]
                                drop leases so the ports can be reused
 
@@ -70,6 +72,7 @@ const SUBCOMMANDS: Record<string, (args: string[]) => number | Promise<number>> 
   why: whyCommand,
   port: portCommand,
   doctor: doctorCommand,
+  skills: skillsCommand,
   release: releaseCommand,
 };
 

@@ -31,7 +31,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "skill-data"
   ],
   "engines": {
     "node": ">=20"

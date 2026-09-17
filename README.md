@@ -373,6 +373,20 @@ share looks exactly like a deleted directory.
 - One bridge network per stack: docker's default address pool runs out somewhere
   around thirty simultaneous stacks.
 
+## For agents
+
+autoport ships the guide an agent needs, served by the CLI so it matches the
+installed version rather than a doc that drifts:
+
+```bash
+autoport skills install     # drop the discovery stub into .claude/skills
+autoport skills list
+autoport skills get setup
+```
+
+`install --global` writes to `~/.claude/skills` instead. Without it, the same
+content is one command away — `autoport skills get core`.
+
 ## Development
 
 ```bash
