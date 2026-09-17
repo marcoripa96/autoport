@@ -4,6 +4,14 @@
   "description": "Automatic, conflict-free port allocation for local dev stacks.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marcoripa96/autoport.git"
+  },
+  "homepage": "https://github.com/marcoripa96/autoport#readme",
+  "bugs": {
+    "url": "https://github.com/marcoripa96/autoport/issues"
+  },
   "bin": {
     "autoport": "./dist/cli.js"
   },
