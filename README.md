@@ -28,6 +28,10 @@ a typo is a compile error — with nothing imported and nothing to resolve at
 runtime. A deployed build that pruned autoport still starts, reading whatever
 your platform sets.
 
+It merges with an `env.d.ts` you already have, keeping both sets of keys. Every
+value is typed `string`, so a file that types one of the same keys as a number
+is a `TS2717` conflict — change it to `string` and coerce where it is used.
+
 Install it as a real dependency only for `resources` and `services` below: they
 give a number where the environment can only give a string, and throw on a
 missing key rather than yielding `undefined`, and that costs an import your

@@ -29,6 +29,26 @@ autoport doctor          # what might be making autoport wrong
 
 **A port autoport allocated collides with something stopped.** autoport skips ports that are listening and ports other autoport projects hold on lease. A non-autoport project that is currently **stopped** is in neither, so its hardcoded port is invisible. Pin yours with `services: { db: { fixed: true } }` if it must not move.
 
+## TS2717 on a file autoport did not write
+
+```
+env.d.ts(3,28): error TS2717: Subsequent property declarations must have the same type.
+  Property 'PORT' must be of type 'string', but here has type 'number'.
+```
+
+Another file already augments `NodeJS.ProcessEnv` and types a key autoport also
+types. Both declarations merge, so they have to agree.
+
+autoport types every environment value `string`, because that is what an
+environment holds. A hand-written `PORT: number` is the usual culprit and the
+usual fix: change it to `string` and coerce at the point of use,
+`Number(process.env.PORT)`. Keys autoport knows nothing about are untouched, and
+a file that already types them as strings — varlock's generated `env.d.ts`, for
+one — merges with no change at all.
+
+`AUTOPORT_TYPEGEN=0` stops autoport generating types at all, if the other file
+has to win.
+
 ## The library says the config was not applied
 
 A TypeScript config cannot be imported synchronously, so a cold library-only start warns and names the missing keys until an autoport command runs. Run any `autoport` command, or use `autoport.config.json`.
