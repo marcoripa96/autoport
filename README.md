@@ -8,7 +8,7 @@ a host port that nothing else on the machine is using, and hands them to your
 code under the environment variable names it already reads.
 
 ```ts
-import { resources } from "autoport";
+import { resources } from "@mr96/autoport";
 
 resources.DATABASE_URL; // postgres://postgres:secret@127.0.0.1:40001/shop
 resources.PORT;         // 40004
@@ -17,7 +17,7 @@ resources.PORT;         // 40004
 ## Quick start
 
 ```bash
-bun add autoport
+bun add @mr96/autoport
 autoport                  # instead of `pnpm dev`
 ```
 
@@ -76,7 +76,7 @@ Postgres service lose it quietly.
 a Next.js app, a test run, or a bare `tsx script.ts` with no wrapper command.
 
 ```ts
-import { resources, services, tryResource, reservePort } from "autoport";
+import { resources, services, tryResource, reservePort } from "@mr96/autoport";
 
 await createClient({ url: resources.REDIS_URL });
 server.listen(resources.PORT);
@@ -198,7 +198,7 @@ AUTOPORT_INSTANCE=e2e autoport playwright test
 `autoport.config.ts` is optional and merges over what was inferred.
 
 ```ts
-import { defineConfig } from "autoport/config";
+import { defineConfig } from "@mr96/autoport/config";
 
 export default defineConfig({
   services: {

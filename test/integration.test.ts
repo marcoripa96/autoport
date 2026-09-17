@@ -164,7 +164,7 @@ describe("generated files", () => {
     const types = renderTypes(resolveProject({ cwd: root }));
     expect(types).toContain(`"DATABASE_URL": string;`);
     expect(types).toContain(`"PORT": number;`);
-    expect(types).toContain(`declare module "autoport"`);
+    expect(types).toContain(`declare module "@mr96/autoport"`);
   });
 });
 

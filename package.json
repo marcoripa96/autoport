@@ -1,5 +1,5 @@
 {
-  "name": "autoport",
+  "name": "@mr96/autoport",
   "version": "0.2.0",
   "description": "Automatic, conflict-free port allocation for local dev stacks.",
   "type": "module",
@@ -35,6 +35,9 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "bun build ./src/index.ts ./src/config.ts ./src/browser.ts ./src/cli.ts --outdir dist --target node --format esm --external yaml && tsc --emitDeclarationOnly",

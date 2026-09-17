@@ -10,7 +10,7 @@ export type { ResolvedProject, ResolvedService };
  * Augmented by the generated `autoport-env.d.ts`:
  *
  * ```ts
- * declare module "autoport" {
+ * declare module "@mr96/autoport" {
  *   interface Resources { DATABASE_URL: string; PORT: number }
  * }
  * ```
